@@ -1,41 +1,94 @@
 from sklearn.model_selection import train_test_split, LeaveOneOut, LeaveOneGroupOut, cross_val_score, StratifiedKFold
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score,confusion_matrix
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 import pandas as pd
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-# Φόρτωση των δεδομένων από το αρχείο CSV
-df = pd.read_csv("/home/poulimenos/project/features.csv")
+# ============================================
+# 1. Φόρτωση και προεπεξεργασία δεδομένων
+# ============================================
 
-# Αφαίρεση γραμμών που περιέχουν NaN
-df = df.dropna()
+# Φόρτωση του dataset
+df_nm = pd.read_csv("/home/poulimenos/project/nm_features.csv")
+df_nm_s1 = pd.read_csv("/home/poulimenos/project/synthetic_data.csv")
+df_nm_s2 = pd.read_csv("/home/poulimenos/project/synthetic_data1.csv")
+df_pd = pd.read_csv("/home/poulimenos/project/pd_features.csv")
+df_koa  = pd.read_csv("/home/poulimenos/project/koa_features.csv")
 
-# Κωδικοποίηση της στήλης στόχου 'disease' σε ακέραιους αριθμούς (0, 1, 2 για KOA, NM, PD)
-df['target'] = df['disease'].map({'KOA': 0, 'NM': 1, 'PD': 2})
+# Αφαίρεση εγγραφών με ελλιπή δεδομένα
+df_nm = df_nm.dropna()
+df_nm = df_nm.drop(columns=['ID'])
+df_nm_s1 = df_nm_s1.dropna()
+df_nm_s2 = df_nm_s2.dropna()
+df_koa = df_koa.dropna()
+df_koa = df_koa.drop(columns=['ID'])
+df_pd=df_pd.dropna()
+df_pd = df_pd.drop(columns=['ID'])
 
-# Δημιουργία των χαρακτηριστικών (X) και του στόχου (y)
-X = df.drop(columns=['koa', 'nm', 'pd', 'id', 'disease', 'target'], errors='ignore')  # Χαρακτηριστικά
-y = df['target']  # Στόχος είναι η στήλη 'target'
+# Επιλογή τυχαίων 1000 μοναδικών γραμμών
+new_df_koa = df_koa.sample(n=1000, replace=False, random_state=42)
 
-# Δημιουργία groups για LAGO-CV (χρησιμοποιούμε μόνο την 'id' για να κατατάξουμε τα δεδομένα σε ομάδες)
-groups = df['id']  # Χρησιμοποιούμε μόνο το 'id' ως ομάδα
+# Συνδυασμός (κατακόρυφος)
+df = pd.concat([df_nm, df_nm_s1,df_nm_s2,new_df_koa,df_pd], axis=0, ignore_index=True)
+
+# Μετατροπή των κειμένων της στήλης 'Disease' σε αριθμητικούς στόχους
+label_encoder = LabelEncoder()
+df['target'] = label_encoder.fit_transform(df['Disease'])
+
+# Ανακάτεμα γραμμών
+shuffled_df = df.sample(frac=1, random_state=42)  # Ορισμός `random_state` για επαναληψιμότητα (προαιρετικό)
+
+
+# Διαχωρισμός δεδομένων σε χαρακτηριστικά (X) και στόχους (y)
+# Καθορίζουμε τα ονόματα των στηλών που θέλουμε να επιλέξουμε
+columns_to_select = [
+    'emd_mean_right_rotation_shoulder', 'emd_std_right_rotation_shoulder', 'emd_energy_right_rotation_shoulder',
+    'emd_mean_right_rotation_hip', 'emd_std_right_rotation_hip', 'emd_energy_right_rotation_hip',
+    'emd_mean_right_rotation_knee', 'emd_std_right_rotation_knee', 'emd_energy_right_rotation_knee',
+    'emd_mean_right_abduction_adduction_shoulder', 'emd_std_right_abduction_adduction_shoulder', 'emd_energy_right_abduction_adduction_shoulder',
+    'emd_mean_right_abduction_adduction_hip', 'emd_std_right_abduction_adduction_hip', 'emd_energy_right_abduction_adduction_hip',
+    'emd_mean_right_abduction_adduction_knee', 'emd_std_right_abduction_adduction_knee', 'emd_energy_right_abduction_adduction_knee',
+    'emd_mean_right_flexion_extension_shoulder', 'emd_std_right_flexion_extension_shoulder', 'emd_energy_right_flexion_extension_shoulder',
+    'emd_mean_right_flexion_extension_hip', 'emd_std_right_flexion_extension_hip', 'emd_energy_right_flexion_extension_hip',
+    'emd_mean_right_flexion_extension_knee', 'emd_std_right_flexion_extension_knee', 'emd_energy_right_flexion_extension_knee',
+    
+    'emd_mean_left_rotation_shoulder', 'emd_std_left_rotation_shoulder', 'emd_energy_left_rotation_shoulder',
+    'emd_mean_left_rotation_hip', 'emd_std_left_rotation_hip', 'emd_energy_left_rotation_hip',
+    'emd_mean_left_rotation_knee', 'emd_std_left_rotation_knee', 'emd_energy_left_rotation_knee',
+    'emd_mean_left_abduction_adduction_shoulder', 'emd_std_left_abduction_adduction_shoulder', 'emd_energy_left_abduction_adduction_shoulder',
+    'emd_mean_left_abduction_adduction_hip', 'emd_std_left_abduction_adduction_hip', 'emd_energy_left_abduction_adduction_hip',
+    'emd_mean_left_abduction_adduction_knee', 'emd_std_left_abduction_adduction_knee', 'emd_energy_left_abduction_adduction_knee',
+    'emd_mean_left_flexion_extension_shoulder', 'emd_std_left_flexion_extension_shoulder', 'emd_energy_left_flexion_extension_shoulder',
+    'emd_mean_left_flexion_extension_hip', 'emd_std_left_flexion_extension_hip', 'emd_energy_left_flexion_extension_hip',
+    'emd_mean_left_flexion_extension_knee', 'emd_std_right_flexion_extension_knee', 'emd_energy_left_flexion_extension_knee',
+    'Disease']
+
+# Επιλέγουμε τις στήλες από το DataFrame
+X = df.drop(columns=columns_to_select)
+
+y = df['target']
+
+scaler=StandardScaler()
+#X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
 # Δημιουργία του μοντέλου RandomForest
 clf = RandomForestClassifier(
-    n_estimators=300, 
-    max_depth=15, 
+    n_estimators=500, 
+    max_depth=20, 
     min_samples_split=10, 
     min_samples_leaf=5, 
-    max_features='sqrt', 
-    bootstrap=True, 
-    random_state=64
+    max_features='log2', 
+    bootstrap=True
 )
 
 # ============================================
 # 1. Hold-Out Validation: Διαχωρισμός των δεδομένων σε εκπαίδευση και τεστ
 # ============================================
 print("1. Hold-Out Validation:")
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, shuffle=True)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=42, shuffle=True)
 clf.fit(X_train, y_train)
 y_pred = clf.predict(X_test)
 
@@ -49,85 +102,11 @@ print(f"Hold-Out Precision: {holdout_precision:.2f}")
 print(f"Hold-Out Recall: {holdout_recall:.2f}")
 print(f"Hold-Out F1-Score: {holdout_f1:.2f}\n")
 
+# Confusion Matrix
+cm = confusion_matrix(y_test, y_pred)
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_)
+plt.title(f"Confusion Matrix Random Forest")
+plt.xlabel("Predicted Labels")
+plt.ylabel("True Labels")
+plt.show()
 
-# ============================================
-# 2. Stratified K-Fold Cross-Validation
-# ============================================
-print("2. Stratified K-Fold Cross-Validation:")
-stratified_kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-stratified_accuracies = []
-stratified_precisions = []
-stratified_recalls = []
-stratified_f1_scores = []
-
-for train_index, test_index in stratified_kf.split(X, y):
-    X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-    y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-    
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
-    
-    stratified_accuracies.append(accuracy_score(y_test, y_pred))
-    stratified_precisions.append(precision_score(y_test, y_pred, average='weighted'))
-    stratified_recalls.append(recall_score(y_test, y_pred, average='weighted'))
-    stratified_f1_scores.append(f1_score(y_test, y_pred, average='weighted'))
-
-print(f"Stratified K-Fold Accuracy: {np.mean(stratified_accuracies):.2f} ± {np.std(stratified_accuracies):.2f}")
-print(f"Stratified K-Fold Precision: {np.mean(stratified_precisions):.2f} ± {np.std(stratified_precisions):.2f}")
-print(f"Stratified K-Fold Recall: {np.mean(stratified_recalls):.2f} ± {np.std(stratified_recalls):.2f}")
-print(f"Stratified K-Fold F1-Score: {np.mean(stratified_f1_scores):.2f} ± {np.std(stratified_f1_scores):.2f}\n")
-
-
-from sklearn.model_selection import LeaveOneGroupOut
-from sklearn.metrics import accuracy_score
-import numpy as np
-
-# ============================================
-# 3. Leave-A-Group-Out Cross-Validation (LAGO-CV) 
-# ============================================
-print("3. Leave-A-Group-Out Cross-Validation (LAGO-CV) - Using 'id':")
-lago = LeaveOneGroupOut()  # Δημιουργία του LAGO-CV
-lago_accuracies = []  # Λίστα για αποθήκευση των ακρίβειών
-
-# Επανάληψη για κάθε ομάδα με την 'id'
-for train_index, test_index in lago.split(X, y, groups):
-    X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-    y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-    
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
-    
-    lago_accuracies.append(accuracy_score(y_test, y_pred))
-
-print(f"LAGO-CV Accuracies for each group (using 'id'): {lago_accuracies}")
-print(f"Mean LAGO Accuracy (using 'id'): {np.mean(lago_accuracies):.2f}\n")
-
-
-
-
-#======================================================================================
-#------Πως επηρρεαζεται απο τα δεδομενα απο αντικείμενα που ανήκουν στην nm κατηγορια==
-#======================================================================================
-df1=df[df['target']>0]
-# Δημιουργία των χαρακτηριστικών (X) και του στόχου (y)
-X = df1.drop(columns=['koa', 'nm', 'pd', 'id', 'disease', 'target'], errors='ignore')  # Χαρακτηριστικά
-y = df1['target']  # Στόχος είναι η στήλη 'target'
-
-
-# ----------------------------------------------------------------------------------
-#  Hold-Out Validation: Διαχωρισμός των δεδομένων σε εκπαίδευση και τεστ
-
-print("1. Hold-Out Validation:")
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, shuffle=True)
-clf.fit(X_train, y_train)
-y_pred = clf.predict(X_test)
-
-holdout_accuracy = accuracy_score(y_test, y_pred)
-holdout_precision = precision_score(y_test, y_pred, average='weighted')
-holdout_recall = recall_score(y_test, y_pred, average='weighted')
-holdout_f1 = f1_score(y_test, y_pred, average='weighted')
-
-print(f"Hold-Out Validation Accuracy: {holdout_accuracy:.2f}")
-print(f"Hold-Out Precision: {holdout_precision:.2f}")
-print(f"Hold-Out Recall: {holdout_recall:.2f}")
-print(f"Hold-Out F1-Score: {holdout_f1:.2f}\n")
